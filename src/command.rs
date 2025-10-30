@@ -103,15 +103,15 @@ pub enum Command {
     Battle,
 
     /// Save the current game
-    #[command(alias = "save", display_order = 5)]
+    #[command(display_order = 5)]
     Save,
 
     /// Load the game
-    #[command(alias = "load", display_order = 6)]
+    #[command(display_order = 6)]
     Load,
 
     /// Set hardcore mode
-    #[command(alias = "hardcore", display_order = 7)]
+    #[command(display_order = 7)]
     Hardcore { on: bool },
 
 

@@ -67,6 +67,7 @@ impl Key {
             "chest-rng" | "chest" | "chest-ring" => Key::Ring(Ring::Chest),
             "gold-rng" | "gold" | "gold-ring" => Key::Ring(Ring::Gold),
             "diamond-rng" | "diamond" | "diamond-ring" => Key::Ring(Ring::Diamond),
+            "amulet" => Key::Amulet,
             key => bail!("item {} not found", key),
         };
         Ok(key)
