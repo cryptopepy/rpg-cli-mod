@@ -27,13 +27,9 @@ Features added in mod:
 ### Using Cargo
 Assuming you have [Rust and Cargo installed](https://doc.rust-lang.org/cargo/getting-started/installation.html#install-rust-and-cargo):
 
-    $ cargo install --git https://github.com/facundoolano/rpg-cli --force --tag 1.2.0
+    $ cargo install --git https://github.com/cryptopepy/rpg-cli-mod --force
 
 The binary should be available as `rpg-cli` (assuming you have `~/.cargo/bin` in your `$PATH`).
-
-### Other installation methods
-<details>
-  <summary>Show details</summary>
 
 ## Shell integration
 
@@ -201,7 +197,7 @@ Each time you complete an item on the list, you will receive a reward. The quest
 
 The game difficulty increases as you go deeper in the dungeon; to raise your level, encounter the tougher enemies, find the rarest items
 and complete all the quests, it's necessary to go as far as possible from the `$HOME` directory. One option to ease the gameplay
-is to [use a shell function](https://github.com/facundoolano/rpg-cli/blob/main/shell/README.md#arbitrary-dungeon-levels) that creates directories "on-demand".
+is to [use a shell function](https://github.com/cryptopepy/rpg-cli-mod/blob/main/shell/README.md#arbitrary-dungeon-levels) that creates directories "on-demand".
 
 Try `rpg --help` for more options and check the [shell integration guide](shell/README.md) for ideas to adapt the game to your preferences.
 
@@ -213,10 +209,7 @@ The `category` field is used to distinguish between player and enemy classes, an
 
 The hero's class can be changed at the home directory using `rpg-cli class <name>`. If the hero is at level 1 it will effectively work as a character re-roll with fresh stats; at higher levels the stats are preserved and the class change will start taking effect on the next level increment.
 
-## Troubleshooting
 
-* The release binary for macOS [is not signed](https://github.com/facundoolano/rpg-cli/issues/27). To open it for the first time, right click on the binary and select "Open" from the menu.
 
-## Feedback appreciated!
 
-If you find any issue, have features ideas, gameplay suggestions or example shell scripts, feel free to [file an issue](https://github.com/facundoolano/rpg-cli/issues/new) to start a conversation.
+If you find any issue, have features ideas, gameplay suggestions or example shell scripts, feel free to [file an issue](https://github.com/cryptopepy/rpg-cli-mod/issues/new) to start a conversation.
