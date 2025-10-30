@@ -10,10 +10,7 @@ High-Level Suggestions:
 
 5.  **More Varied Encounters:** Currently, encounters seem to be limited to single enemies. Adding multi-enemy encounters, or even friendly NPCs that can help the player, would add more variety to the gameplay.
 
-Code-Level Suggestions:
+Also
 
 1.  **Configuration:** The `classes.yaml` is a great way to allow customization. This could be extended to other parts of the game, such as items, quests, and enemy generation. This would make the game highly moddable.
 
-2.  **Testing:** The `game.rs` file has a good set of unit tests. Expanding the test suite to cover more of the codebase, especially the `character` and `item` modules, would help ensure the game's stability as new features are added.
-
-3.  **Error Handling:** The use of `anyhow` for error handling is good. A more granular error handling system could be implemented to provide more specific error messages to the user.
