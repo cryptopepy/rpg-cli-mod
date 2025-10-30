@@ -15,8 +15,12 @@ Features:
 * Permadeath with item recovering.
 * Quests to-do list.
 * Chests hidden in directories.
-
-See [this blog post](https://olano.dev/blog/deconstructing-the-role-playing-videogame/) for background on the development process.
+Features added in mod:
+* Optional save/load feature.
+* Interactive combat options.
+* Skill system with active/passive abilities.
+* Expanded story and lore.
+* Varied encounters, including multi-enemy battles.
 
 ## Installation
 
@@ -35,29 +39,9 @@ The binary should be available as `rpg-cli` (assuming you have `~/.cargo/bin` in
 <details>
   <summary>Show details</summary>
 
-#### Homebrew (macOS)
-You can use homebrew to install the binary on macOS::
-
-    $ brew install rpg-cli
-
-#### Nixpkgs
-If you use Nix/NixOS you can get rpg-cli from nixpkgs, either install it by adding it to your system config, with `nix-env -i rpg-cli`/`nix profile install nixpkgs#rpg-cli` or try it in a ephemeral shell with `nix-shell -p rpg-cli`/`nix shell nixpkgs#rpg-cli`.
-
-#### Portage (Gentoo)
-If you use Gentoo, you can get rpg-cli from portage:
-
-    # emerge -av games-rpg/rpg-cli
-
-#### Pacman (Arch Linux)
-
-rpg-cli can be installed from the [extra repository](https://archlinux.org/packages/extra/x86_64/rpg-cli/) for Arch Linux:
-
-    $ pacman -S rpg-cli
-</details>
-
 ## Shell integration
 
-The game is designed to integrate with common file system operations, such as changing directories or deleting files.
+The game is designed to integrate with common file system operations, such as changing directories or reading files.
 The most basic type of integration consists in wrapping rpg-cli in a shell function, such that the working directory is updated to match the hero's progress, effectively working as a `cd` alternative:
 
 ```sh
@@ -172,7 +156,7 @@ The further from home you move the hero, the tougher the enemies will get. If yo
      warrior[1][x---] -9hp
       zombie[3][x---] -12hp
      warrior[1][----] -20hp critical!
-     warrior[1][----] 💀
+     warrior[1][----] dead
 
 Death is permanent: you can't save your progress and reload after dying, but if you take your new hero to the location of the previous one's death,
 you can recover gold, items and equipment:
@@ -185,7 +169,7 @@ you can recover gold, items and equipment:
 In addition to winning items as battle rewards, some directories have hidden treasure chests that you can find with `rpg ls`:
 
     ~ $ rpg ls
-    📦  +potionx2
+      +potionx2
 
 Finally, some items can be bought at the game directory running `rpg buy`:
 
@@ -236,3 +220,7 @@ The hero's class can be changed at the home directory using `rpg-cli class <name
 ## Troubleshooting
 
 * The release binary for macOS [is not signed](https://github.com/facundoolano/rpg-cli/issues/27). To open it for the first time, right click on the binary and select "Open" from the menu.
+
+## Feedback appreciated!
+
+If you find any issue, have features ideas, gameplay suggestions or example shell scripts, feel free to [file an issue](https://github.com/facundoolano/rpg-cli/issues/new) to start a conversation.

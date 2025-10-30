@@ -48,8 +48,8 @@ It can be integrated to the regular ls like this:
 ls () {
     command ls "$@"
     if [ $# -eq 0 ] ; then
-        rpg-cli cd -f .
-        rpg-cli ls
+        rpg cd -f .
+        rpg ls
     fi
 }
 ```
@@ -133,18 +133,5 @@ cd () {
     builtin cd "$@"
     rpg-cli cd -f .
     rpg-cli battle
-}
-```
-
-### Staying in the current work directory on death
-
-By default the shell integrations will send the user back to the home directory after death. To prevent this, we can change back to the current directory after each battle
-
-For example for cd:
-```sh
-cd () {
-    builtin cd "$@"
-    rpg-cli cd -f .
-    rpg-cli battle; rpg-cli cd -f .
 }
 ```

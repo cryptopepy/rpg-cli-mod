@@ -26,7 +26,7 @@ pub trait Randomizer {
 
     fn damage(&self, value: i32) -> i32;
 
-    fn is_miss(&self, attacker_speed: i32, receiver_speed: i32) -> bool;
+    fn is_miss(&self, attacker_speed: i32, receiver: &crate::character::Character) -> bool;
 
     fn is_critical(&self) -> bool;
 
@@ -106,7 +106,8 @@ impl Randomizer for DefaultRandomizer {
         max(1, rng.gen_range(min_val..=max_val))
     }
 
-    fn is_miss(&self, attacker_speed: i32, receiver_speed: i32) -> bool {
+    fn is_miss(&self, attacker_speed: i32, receiver: &crate::character::Character) -> bool {
+        let receiver_speed = receiver.speed();
         if receiver_speed > attacker_speed {
             let ratio = receiver_speed / attacker_speed;
             let ratio = max(1, 5 - ratio) as u32;
@@ -228,7 +229,7 @@ impl Randomizer for TestRandomizer {
         value
     }
 
-    fn is_miss(&self, _attacker_speed: i32, _receiver_speed: i32) -> bool {
+    fn is_miss(&self, _attacker_speed: i32, _receiver: &crate::character::Character) -> bool {
         false
     }
 

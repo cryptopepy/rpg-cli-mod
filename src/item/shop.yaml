@@ -1,0 +1,12 @@
+- name: "sword"
+  cost: 500
+- name: "shield"
+  cost: 500
+- name: "potion"
+  cost: 200
+- name: "remedy"
+  cost: 400
+- name: "escape"
+  cost: 1000
+- name: "diamond_ring"
+  cost: 10000

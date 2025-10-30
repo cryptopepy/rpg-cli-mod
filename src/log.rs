@@ -189,6 +189,56 @@ pub fn quest_done(reward: i32) {
     }
 }
 
+pub fn npc_encounter(encounter: &crate::character::npc::Encounter) {
+    match encounter {
+        crate::character::npc::Encounter::Gambler => {
+            println!(
+                "{} {}",
+                "A goblin with a wide grin shuffles a deck of cards.".yellow(),
+                "Wanna bet?".bold()
+            );
+        }
+        crate::character::npc::Encounter::Witch => {
+            println!(
+                "{} {}",
+                "A witch cackles over her cauldron.".purple(),
+                "Care for a potion?".bold()
+            );
+        }
+        crate::character::npc::Encounter::GhostlyMaiden => {
+            println!(
+                "{} {}",
+                "A ghostly maiden drifts through the air.".cyan(),
+                "Listen to my tale...".bold()
+            );
+        }
+    }
+}
+
+pub fn skill_list(player: &Character) {
+    println!("Available skills ({} skill points):", player.skill_points);
+    for skill in &player.class.skills {
+        let unlocked = if player.unlocked_skills.contains(&skill.name) {
+            "✔".green()
+        } else {
+            "□".dimmed()
+        };
+
+        let mut details = format!("Lvl {}", skill.level_requirement);
+        if skill.cost > 0 {
+            details.push_str(&format!(", {} MP", skill.cost));
+        }
+
+        println!(
+            "  {} {}: {} ({})",
+            unlocked,
+            skill.name.bold(),
+            skill.description,
+            details
+        );
+    }
+}
+
 fn level_up(levels_up: i32) -> String {
     if levels_up > 0 {
         let plus = (0..levels_up).map(|_| "+").collect::<String>();

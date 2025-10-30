@@ -1,3 +1,4 @@
+use super::amulet::Amulet;
 use super::equipment::Equipment;
 use super::key::Key;
 use super::ring;
@@ -24,6 +25,13 @@ pub struct Chest {
 impl Chest {
     /// Randomly generate a chest at the current location.
     pub fn generate(game: &mut game::Game) -> Option<Self> {
+        if game.player.level >= 2 && !game.amulet_quest_item_generated {
+            let mut chest = Self::default();
+            chest.items.push(Box::new(Amulet::new()));
+            game.amulet_quest_item_generated = true;
+            return Some(chest);
+        }
+
         // if the evade ring is equipped, don't generate chests
         // otherwise player can go arbitrarily deep and break the game
         // by finding all treasure contents

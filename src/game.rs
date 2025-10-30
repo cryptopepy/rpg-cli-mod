@@ -24,6 +24,10 @@ pub struct Game {
     pub player: Character,
     pub location: Location,
     pub gold: i32,
+    pub hardcore: bool,
+    pub in_combat: Option<Character>,
+    pub in_encounter: Option<character::npc::Encounter>,
+    battle_xp: i32,
 
     /// Items currently carried and unequipped
     pub inventory: HashMap<Key, Vec<Box<dyn Item>>>,
@@ -34,6 +38,8 @@ pub struct Game {
 
     /// Chests left at the location where the player dies.
     pub tombstones: HashMap<String, Chest>,
+
+    pub amulet_quest_item_generated: bool,
 
     /// There's one instance of each type of ring in the game.
     /// This set starts with all rings and they are moved to the inventory as
@@ -57,9 +63,14 @@ impl Game {
             location: Location::home(),
             player: Character::player(),
             gold: 0,
+            hardcore: true,
+            in_combat: None,
+            in_encounter: None,
+            battle_xp: 0,
             inventory: HashMap::new(),
             tombstones: HashMap::new(),
             inspected: HashSet::new(),
+            amulet_quest_item_generated: false,
             quests,
             ring_pool,
         }
@@ -68,6 +79,10 @@ impl Game {
     /// Remove the game data and reset this reference.
     /// Progress is preserved across games.
     pub fn reset(&mut self) {
+        if !self.hardcore {
+            return;
+        }
+
         let mut new_game = Self::new();
         // preserve tombstones and quests across hero's lifes
         std::mem::swap(&mut new_game.tombstones, &mut self.tombstones);
@@ -85,19 +100,21 @@ impl Game {
 
     /// Move the hero's location towards the given destination, one directory
     /// at a time, with some chance of enemies appearing on each one.
-    pub fn go_to(
-        &mut self,
-        dest: &Location,
-        run: bool,
-        bribe: bool,
-    ) -> Result<(), character::Dead> {
+    pub fn go_to(&mut self, dest: &Location) -> Result<(), anyhow::Error> {
         while self.location != *dest {
             self.visit(self.location.go_to(dest))?;
 
             if !self.location.is_home() {
-                if let Some(mut enemy) = enemy::spawn(&self.location, &self.player) {
-                    if self.battle(&mut enemy, run, bribe)? {
-                        return Ok(());
+                if self.in_combat.is_none() && self.in_encounter.is_none() {
+                    if let Some(enemy) = enemy::spawn(self) {
+                        log::enemy_appears(&enemy, &self.location);
+                        self.in_combat = Some(enemy);
+                        break;
+                    } else {
+                        character::npc::spawn(self);
+                        if self.in_encounter.is_some() {
+                            break;
+                        }
                     }
                 }
             }
@@ -106,7 +123,7 @@ impl Game {
     }
 
     /// Set the hero's location to the one given, and apply related side effects.
-    pub fn visit(&mut self, location: Location) -> Result<(), character::Dead> {
+    pub fn visit(&mut self, location: Location) -> Result<(), anyhow::Error> {
         self.location = location;
         if self.location.is_home() {
             let (recovered_hp, recovered_mp, healed) = self.player.restore();
@@ -125,8 +142,9 @@ impl Game {
         if let Err(character::Dead) = result {
             // drops tombstone
             self.battle_lost();
+            return Err(anyhow::anyhow!(character::Dead));
         }
-        result
+        Ok(())
     }
 
     /// Look for chests and tombstones at the current location.
@@ -226,22 +244,45 @@ impl Game {
     /// and start a battle if that fails.
     /// Return Ok(true) if a battle took place, Ok(false) if it was avoided,
     /// Err<Dead> if the character dies.
-    pub fn battle(
-        &mut self,
-        enemy: &mut Character,
-        run: bool,
-        bribe: bool,
-    ) -> Result<bool, character::Dead> {
-        // don't attempt bribe and run in the same turn
-        if bribe {
-            let bribe_cost = self.player.gold_gained(enemy.level) / 2;
-            if self.gold >= bribe_cost && random().bribe_succeeds() {
-                self.gold -= bribe_cost;
-                log::bribe(&self.player, bribe_cost);
-                return Ok(false);
-            };
-            log::bribe(&self.player, 0);
-        } else if run {
+    pub fn battle_round(&mut self) -> Result<(), anyhow::Error> {
+        if let Some(mut enemy) = self.in_combat.take() {
+            // Player attacks
+            let (xp, _) = self.player.attack(&mut enemy);
+            self.battle_xp += xp;
+
+            if enemy.current_hp <= 0 {
+                self.battle_won(&enemy, self.battle_xp);
+                self.battle_xp = 0;
+                return Ok(());
+            }
+
+            // Enemy attacks
+            let (_, died) = enemy.attack(&mut self.player);
+            if let Err(character::Dead) = self.player.maybe_revive(died, false) {
+                self.battle_lost();
+                self.battle_xp = 0;
+                return Err(anyhow::anyhow!(character::Dead));
+            }
+
+            // Status effects
+            if let Err(character::Dead) = self.player.apply_status_effects() {
+                self.battle_lost();
+                self.battle_xp = 0;
+                return Err(anyhow::anyhow!(character::Dead));
+            }
+            enemy.apply_status_effects().unwrap_or_default();
+
+            // Battle is not over, put the enemy back
+            self.in_combat = Some(enemy);
+            log::status(self);
+        } else {
+            bail!("Not in combat.");
+        }
+        Ok(())
+    }
+
+    pub fn player_flee(&mut self) -> Result<(), anyhow::Error> {
+        if let Some(mut enemy) = self.in_combat.take() {
             let success = random().run_away_succeeds(
                 self.player.level,
                 enemy.level,
@@ -250,69 +291,45 @@ impl Game {
             );
             log::run_away(&self.player, success);
             if success {
-                return Ok(false);
+                self.battle_xp = 0;
+            } else {
+                // enemy attacks
+                let (_, died) = enemy.attack(&mut self.player);
+                if let Err(character::Dead) = self.player.maybe_revive(died, false) {
+                    self.battle_lost();
+                    self.battle_xp = 0;
+                    return Err(anyhow::anyhow!(character::Dead));
+                }
+                self.in_combat = Some(enemy);
             }
-        }
-
-        if let Ok(xp) = self.run_battle(enemy) {
-            self.battle_won(enemy, xp);
-            Ok(true)
         } else {
-            self.battle_lost();
-            Err(character::Dead)
+            bail!("Not in combat.");
         }
+        Ok(())
     }
 
-    /// Runs a turn-based combat between the game's player and the given enemy.
-    /// The frequency of the turns is determined by the speed stat of each
-    /// character.
-    ///
-    /// Some special abilities are enabled by the player's equipped rings:
-    /// Double-beat, counter-attack and revive.
-    ///
-    /// Returns Ok(xp gained) if the player wins, or Err(()) if it loses.
-    fn run_battle(&mut self, enemy: &mut Character) -> Result<i32, character::Dead> {
-        // Player's using the revive ring can come back to life at most once per battle
-        let mut already_revived = false;
-
-        // These accumulators get increased based on the character's speed:
-        // the faster will get more frequent turns.
-        let (mut pl_accum, mut en_accum) = (0, 0);
-        let mut xp = 0;
-
-        while enemy.current_hp > 0 {
-            pl_accum += self.player.speed();
-            en_accum += enemy.speed();
-
-            if pl_accum >= en_accum {
-                // In some urgent circumstances, it's preferable to use the turn to
-                // recover mp or hp than attacking
-                if !self.autopotion(enemy) && !self.autoether(enemy) {
-                    let (new_xp, _) = self.player.attack(enemy);
-                    xp += new_xp;
-
-                    self.player.maybe_double_beat(enemy);
-                }
-
-                // Status effects are applied after each turn. The player may die
-                // during its own turn because of status ailment damage
-                let died = self.player.apply_status_effects();
-                already_revived = self.player.maybe_revive(died, already_revived)?;
-
-                pl_accum = -1;
+    pub fn player_bribe(&mut self) -> Result<(), anyhow::Error> {
+        if let Some(mut enemy) = self.in_combat.take() {
+            let bribe_cost = self.player.gold_gained(enemy.level) / 2;
+            if self.gold >= bribe_cost && random().bribe_succeeds() {
+                self.gold -= bribe_cost;
+                log::bribe(&self.player, bribe_cost);
+                self.battle_xp = 0;
             } else {
+                log::bribe(&self.player, 0);
+                // enemy attacks
                 let (_, died) = enemy.attack(&mut self.player);
-                already_revived = self.player.maybe_revive(died, already_revived)?;
-
-                self.player.maybe_counter_attack(enemy);
-
-                enemy.apply_status_effects().unwrap_or_default();
-
-                en_accum = -1;
+                if let Err(character::Dead) = self.player.maybe_revive(died, false) {
+                    self.battle_lost();
+                    self.battle_xp = 0;
+                    return Err(anyhow::anyhow!(character::Dead));
+                }
+                self.in_combat = Some(enemy);
             }
+        } else {
+            bail!("Not in combat.");
         }
-
-        Ok(xp)
+        Ok(())
     }
 
     fn battle_won(&mut self, enemy: &Character, xp: i32) {
@@ -340,36 +357,59 @@ impl Game {
         log::battle_lost(&self.player);
     }
 
-    /// If the player is low on hp and has a potion available use it
-    /// instead of attacking in the current turn.
-    fn autopotion(&mut self, enemy: &Character) -> bool {
-        if self.player.current_hp > self.player.max_hp() / 3 {
-            return false;
+    pub fn use_skill(&mut self, skill_name: &str) -> Result<(), anyhow::Error> {
+        if let Some(mut enemy) = self.in_combat.take() {
+            let skill = self
+                .player
+                .class
+                .skills
+                .iter()
+                .find(|s| s.name.eq_ignore_ascii_case(skill_name));
+
+            if let Some(skill) = skill {
+                if !self.player.unlocked_skills.contains(&skill.name) {
+                    bail!("Skill not unlocked.");
+                }
+
+                if self.player.current_mp < skill.cost {
+                    bail!("Not enough MP to use this skill.");
+                }
+                self.player.current_mp -= skill.cost;
+
+                match skill.name.as_str() {
+                    "Power Strike" => {
+                        let (damage, _) = self.player.damage(&enemy);
+                        let damage = damage * 2;
+                        log::attack(&enemy, &crate::character::AttackType::Regular, damage, 0);
+                        if let Err(character::Dead) = enemy.update_hp(-damage) {
+                            self.battle_won(&enemy, self.battle_xp);
+                            self.battle_xp = 0;
+                            return Ok(());
+                        }
+                    }
+                    "Heal" => {
+                        let heal_amount = self.player.max_hp() / 4;
+                        self.player.update_hp(heal_amount).unwrap();
+                        log::heal_item(&self.player, "Heal", heal_amount, 0, false);
+                    }
+                    _ => bail!("Unknown skill."),
+                }
+            } else {
+                bail!("Skill not found.");
+            }
+
+            // Enemy attacks
+            let (_, died) = enemy.attack(&mut self.player);
+            if let Err(character::Dead) = self.player.maybe_revive(died, false) {
+                self.battle_lost();
+                self.battle_xp = 0;
+                return Err(anyhow::anyhow!(character::Dead));
+            }
+            self.in_combat = Some(enemy);
+        } else {
+            bail!("Not in combat.");
         }
-
-        // If there's a good chance of winning the battle on the next attack,
-        // don't use the potion.
-        let (potential_damage, _) = self.player.damage(enemy);
-        if potential_damage >= enemy.current_hp {
-            return false;
-        }
-
-        self.use_item(Key::Potion).is_ok()
-    }
-
-    fn autoether(&mut self, enemy: &Character) -> bool {
-        if !self.player.class.is_magic() || self.player.can_magic_attack() {
-            return false;
-        }
-
-        // If there's a good chance of winning the battle on the next attack,
-        // don't use the ether.
-        let (potential_damage, _) = self.player.damage(enemy);
-        if potential_damage >= enemy.current_hp {
-            return false;
-        }
-
-        self.use_item(Key::Ether).is_ok()
+        Ok(())
     }
 }
 

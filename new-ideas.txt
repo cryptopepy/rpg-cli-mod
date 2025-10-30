@@ -1,0 +1,19 @@
+High-Level Suggestions:
+
+1.  **Persistence:** The game currently has permadeath, which is a classic RPG feature. However, offering an optional save/load feature would make the game more accessible to a wider audience. This could be a separate "hardcore" mode.
+
+2.  **More Interactive Combat:** The combat is currently automatic. While this is great for a quick `cd` replacement, adding more interactive elements could be a fun optional feature. For example, allowing the player to choose their attack, use an item during their turn, or attempt to flee.
+
+3.  **Skill System:** The current class system is a great start. This could be expanded with a skill tree for each class. As players level up, they could unlock new active or passive abilities. This would add more depth to character progression.
+
+4.  **Story/Lore:** The quest system is a good way to guide the player. Expanding on this with a simple storyline or more lore about the world could make the game more engaging. This could be done through finding lore items, or through more complex quests.
+
+5.  **More Varied Encounters:** Currently, encounters seem to be limited to single enemies. Adding multi-enemy encounters, or even friendly NPCs that can help the player, would add more variety to the gameplay.
+
+Code-Level Suggestions:
+
+1.  **Configuration:** The `classes.yaml` is a great way to allow customization. This could be extended to other parts of the game, such as items, quests, and enemy generation. This would make the game highly moddable.
+
+2.  **Testing:** The `game.rs` file has a good set of unit tests. Expanding the test suite to cover more of the codebase, especially the `character` and `item` modules, would help ensure the game's stability as new features are added.
+
+3.  **Error Handling:** The use of `anyhow` for error handling is good. A more granular error handling system could be implemented to provide more specific error messages to the user.

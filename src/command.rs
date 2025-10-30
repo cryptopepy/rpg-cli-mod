@@ -5,6 +5,7 @@ use crate::item;
 use crate::item::key::Key;
 use crate::location::Location;
 use crate::log;
+use crate::randomizer::Randomizer;
 use anyhow::{anyhow, bail, Result};
 
 use clap::Parser;
@@ -22,14 +23,6 @@ pub enum Command {
         /// Directory to move to.
         #[arg(default_value = "~")]
         destination: String,
-
-        /// Attempt to avoid battles by running away.
-        #[arg(long)]
-        run: bool,
-
-        /// Attempt to avoid battles by bribing the enemy.
-        #[arg(long)]
-        bribe: bool,
 
         /// Move the hero's to a different location without spawning enemies.
         /// Intended for scripts and shell integration.
@@ -69,33 +62,74 @@ pub enum Command {
     #[command(name = "pwd")]
     PrintWorkDir,
 
-    /// Potentially initiates a battle in the hero's current location.
-    Battle {
-        /// Attempt to avoid battles by running away.
-        #[arg(long)]
-        run: bool,
+    /// Attack the enemy in the current location
+    #[command(alias = "a")]
+    Attack,
 
-        /// Attempt to avoid battles by bribing the enemy.
-        #[arg(long)]
-        bribe: bool,
+    /// Attempt to flee from the enemy
+    Flee,
+
+    /// Attempt to bribe the enemy
+    Bribe,
+
+    /// List available skills
+    Skills,
+
+    /// Learn a skill
+    Learn {
+        #[arg(required = true)]
+        skill_name: String,
     },
+
+    /// Use a skill
+    UseSkill {
+        #[arg(required = true)]
+        skill_name: String,
+    },
+
+    /// Bet gold on a coin flip
+    Bet {
+        #[arg(required = true)]
+        amount: i32,
+    },
+
+    /// Ask the witch to brew a potion
+    Brew,
+
+    /// Listen to the ghostly maiden's story
+    Listen,
+
+    /// Potentially initiates a battle in the hero's current location.
+    Battle,
+
+    /// Save the current game
+    #[command(alias = "save", display_order = 5)]
+    Save,
+
+    /// Load the game
+    #[command(alias = "load", display_order = 6)]
+    Load,
+
+    /// Set hardcore mode
+    #[command(alias = "hardcore", display_order = 7)]
+    Hardcore { on: bool },
+
 
     #[command(hide = true)]
     Idkfa { level: i32 },
 }
 
-pub fn run(cmd: Option<Command>, game: &mut Game) -> Result<()> {
+pub fn run(cmd: Option<Command>, game: &mut Game) -> Result<bool> {
+    let mut save = true;
     match cmd.unwrap_or(Command::Stat { items: vec![] }) {
         Command::Stat { items } => stat(game, &items)?,
         Command::ChangeDir {
             destination,
-            run,
-            bribe,
             force,
-        } => change_dir(game, &destination, run, bribe, force)?,
+        } => change_dir(game, &destination, force)?,
         Command::Inspect => game.inspect(),
         Command::Class { name } => class(game, &name)?,
-        Command::Battle { run, bribe } => battle(game, run, bribe)?,
+        Command::Battle => battle(game)?,
         Command::PrintWorkDir => println!("{}", game.location.path_string()),
         Command::Reset { .. } => game.reset(),
         Command::Buy { items } => shop(game, &items)?,
@@ -103,27 +137,174 @@ pub fn run(cmd: Option<Command>, game: &mut Game) -> Result<()> {
         Command::Todo => {
             log::quest_list(game.quests.list());
         }
+        Command::Save => save_game(game)?,
+        Command::Load => {
+            load_game(game)?;
+            save = false;
+        }
+        Command::Hardcore { on } => set_hardcore(game, on)?,
+        Command::Attack => attack(game)?,
+        Command::Flee => flee(game)?,
+        Command::Bribe => bribe(game)?,
+        Command::Skills => skills(game)?,
+        Command::Learn { skill_name } => learn(game, &skill_name)?,
+        Command::UseSkill { skill_name } => use_skill(game, &skill_name)?,
+        Command::Bet { amount } => bet(game, amount)?,
+        Command::Brew => brew(game)?,
+        Command::Listen => listen(game)?,
         Command::Idkfa { level } => debug_command(game, level),
     };
 
+    Ok(save)
+}
+
+fn bet(game: &mut Game, amount: i32) -> Result<()> {
+    if let Some(character::npc::Encounter::Gambler) = &game.in_encounter {
+        if amount > game.gold {
+            bail!("You don't have that much gold to bet.");
+        }
+        if crate::randomizer::random().range(2) == 0 {
+            println!("You won! You double your bet.");
+            game.gold += amount;
+        } else {
+            println!("You lost! You lose your bet.");
+            game.gold -= amount;
+        }
+        game.in_encounter = None;
+    } else {
+        bail!("There is no one to bet with here.");
+    }
+    Ok(())
+}
+
+fn brew(game: &mut Game) -> Result<()> {
+    if let Some(character::npc::Encounter::Witch) = &game.in_encounter {
+        println!("The witch brews a bubbling potion and hands it to you.");
+        let potion = crate::item::Potion::new(game.player.level);
+        game.add_item(Box::new(potion));
+        game.in_encounter = None;
+    } else {
+        bail!("There is no witch here to brew a potion.");
+    }
+    Ok(())
+}
+
+fn listen(game: &mut Game) -> Result<()> {
+    if let Some(character::npc::Encounter::GhostlyMaiden) = &game.in_encounter {
+        let lore = match crate::randomizer::random().range(3) {
+            0 => "She whispers of a hidden treasure in a nearby cave.",
+            1 => "She speaks of a great evil that slumbers deep within the earth.",
+            2 => "She warns of a powerful dragon that guards the mountain pass.",
+            _ => unreachable!(),
+        };
+        println!("The ghostly maiden's voice echoes in your mind: '{}'", lore);
+        game.in_encounter = None;
+    } else {
+        bail!("There is no one to listen to here.");
+    }
+    Ok(())
+}
+
+fn skills(game: &mut Game) -> Result<()> {
+    log::skill_list(&game.player);
+    Ok(())
+}
+
+fn learn(game: &mut Game, skill_name: &str) -> Result<()> {
+    game.player.learn_skill(skill_name)?;
+    println!("Skill '{}' learned.", skill_name);
+    Ok(())
+}
+
+fn use_skill(game: &mut Game, skill_name: &str) -> Result<()> {
+    if let Err(err) = game.use_skill(skill_name) {
+        if err.downcast_ref::<character::Dead>().is_some() {
+            game.reset();
+            bail!("");
+        }
+        return Err(err);
+    }
+    Ok(())
+}
+
+
+fn attack(game: &mut Game) -> Result<()> {
+    if let Err(err) = game.battle_round() {
+        if err.downcast_ref::<character::Dead>().is_some() {
+            game.reset();
+            bail!("");
+        }
+        return Err(err);
+    }
+    Ok(())
+}
+
+fn flee(game: &mut Game) -> Result<()> {
+    if let Err(err) = game.player_flee() {
+        if err.downcast_ref::<character::Dead>().is_some() {
+            game.reset();
+            bail!("");
+        }
+        return Err(err);
+    }
+    Ok(())
+}
+
+fn bribe(game: &mut Game) -> Result<()> {
+    if let Err(err) = game.player_bribe() {
+        if err.downcast_ref::<character::Dead>().is_some() {
+            game.reset();
+            bail!("");
+        }
+        return Err(err);
+    }
+    Ok(())
+}
+
+fn save_game(game: &Game) -> Result<()> {
+    crate::datafile::save(game)?;
+    println!("Game saved.");
+    Ok(())
+}
+
+fn load_game(game: &mut Game) -> Result<()> {
+    if let Some(loaded_game) = crate::datafile::load()? {
+        *game = loaded_game;
+        println!("Game loaded.");
+    } else {
+        bail!("No saved game found.");
+    }
+    Ok(())
+}
+
+fn set_hardcore(game: &mut Game, on: bool) -> Result<()> {
+    game.hardcore = on;
+    if on {
+        println!("Hardcore mode enabled.");
+    } else {
+        println!("Hardcore mode disabled.");
+    }
     Ok(())
 }
 
 /// Attempt to move the hero to the supplied location, possibly engaging
 /// in combat along the way.
-fn change_dir(game: &mut Game, dest: &str, run: bool, bribe: bool, force: bool) -> Result<()> {
+fn change_dir(game: &mut Game, dest: &str, force: bool) -> Result<()> {
     let dest = Location::from(dest)?;
     let result = if force {
         // When change is force, skip enemies along the way
         // but still apply side-effects at destination
         game.visit(dest)
     } else {
-        game.go_to(&dest, run, bribe)
+        game.go_to(&dest)
     };
 
-    if let Err(character::Dead) = result {
-        game.reset();
-        bail!("");
+    if let Err(err) = result {
+        if err.downcast_ref::<character::Dead>().is_some() {
+            game.reset();
+            bail!("");
+        }
+        return Err(err.into());
     }
 
     Ok(())
@@ -131,12 +312,15 @@ fn change_dir(game: &mut Game, dest: &str, run: bool, bribe: bool, force: bool) 
 
 /// Potentially run a battle at the current location, independently from
 /// the hero's movement.
-fn battle(game: &mut Game, run: bool, bribe: bool) -> Result<()> {
-    if let Some(mut enemy) = enemy::spawn(&game.location, &game.player) {
-        if let Err(character::Dead) = game.battle(&mut enemy, run, bribe) {
-            game.reset();
-            bail!("");
-        }
+fn battle(game: &mut Game) -> Result<()> {
+    if game.in_combat.is_some() {
+        bail!("Already in combat.");
+    }
+    if let Some(enemy) = enemy::spawn(game) {
+        log::enemy_appears(&enemy, &game.location);
+        game.in_combat = Some(enemy);
+    } else {
+        println!("No enemies found here.");
     }
     Ok(())
 }

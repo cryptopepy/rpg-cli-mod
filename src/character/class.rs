@@ -42,6 +42,24 @@ pub struct Class {
     pub category: Category,
 
     pub inflicts: Option<(super::StatusEffect, u32)>,
+
+    #[serde(default)]
+    pub skills: Vec<Skill>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Skill {
+    pub name: String,
+    pub description: String,
+    pub skill_type: SkillType,
+    pub level_requirement: i32,
+    pub cost: i32, // MP cost for active skills
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum SkillType {
+    Passive,
+    Active,
 }
 
 /// Determines whether the class is intended for a Player or, if it's for an enemy,
@@ -95,6 +113,14 @@ impl Class {
             .iter()
             .map(|class| class.name.clone())
             .collect()
+    }
+
+    pub fn enemies() -> Vec<&'static Class> {
+        let mut enemies = Vec::new();
+        enemies.extend(Self::of(Category::Common));
+        enemies.extend(Self::of(Category::Rare));
+        enemies.extend(Self::of(Category::Legendary));
+        enemies
     }
 
     fn of(category: Category) -> &'static Vec<Class> {

@@ -3,26 +3,35 @@ use crate::item::ring::Ring;
 use crate::location;
 use crate::log;
 use crate::randomizer::{random, Randomizer};
-use rand::prelude::SliceRandom;
+use rand::prelude::IteratorRandom;
 use rand::Rng;
 
 /// Randomly spawn an enemy character at the given location, based on the
 /// current character stats.
 /// The distance from home will influence the enemy frequency and level.
 /// Under certain conditions, special (quest-related) enemies may be spawned.
-pub fn spawn(location: &location::Location, player: &Character) -> Option<Character> {
+pub fn spawn(game: &crate::game::Game) -> Option<Character> {
+    let player = &game.player;
+    let location = &game.location;
+
     if player.enemies_evaded() {
         return None;
     }
 
     let distance = location.distance_from_home();
     if random().should_enemy_appear(&distance) {
-        // try spawning "special" enemies if conditions are met, otherwise
-        // a random one for the current location
-        let (class, level) = spawn_gorthaur(player, location)
-            .or_else(|| spawn_shadow(player, location))
-            .or_else(|| spawn_dev(player, location))
-            .unwrap_or_else(|| spawn_random(player, &distance));
+        let guardian_quest_unlocked = game.quests.list().iter().any(|(completed, description)| {
+            !completed && description == "Defeat the Guardian."
+        });
+
+        let (class, level) = if guardian_quest_unlocked && distance.len() > 10 {
+            (Class::player_by_name("guardian").unwrap().clone(), player.level + 5)
+        } else {
+            spawn_gorthaur(player, location)
+                .or_else(|| spawn_shadow(player, location))
+                .or_else(|| spawn_dev(player, location))
+                .unwrap_or_else(|| spawn_random(player, &distance))
+        };
 
         let level = random().enemy_level(level);
         let enemy = Character::new(class, level);
@@ -82,32 +91,36 @@ fn spawn_dev(player: &Character, location: &location::Location) -> Option<(Class
 
 /// Choose an enemy randomly, with higher chance to difficult enemies the further from home.
 fn spawn_random(player: &Character, distance: &location::Distance) -> (Class, i32) {
-    // the weights for each group of enemies are different depending on the distance
-    // the further from home, the bigger the chance to find difficult enemies
-    let (w_common, w_rare, w_legendary) = match distance {
-        location::Distance::Near(_) => (10, 2, 0),
-        location::Distance::Mid(_) => (8, 10, 1),
-        location::Distance::Far(_) => (0, 8, 2),
-    };
-
     let mut rng = rand::thread_rng();
+    let enemies = Class::enemies();
 
-    // assign weights to each group and select one
-    let weights = vec![
-        (Category::Common, w_common),
-        (Category::Rare, w_rare),
-        (Category::Legendary, w_legendary),
-    ];
+    let mut enemy_groups: std::collections::HashMap<String, Vec<&Class>> =
+        std::collections::HashMap::new();
+    for enemy in enemies {
+        let base_name = enemy.name.split(' ').next().unwrap().to_string();
+        enemy_groups.entry(base_name).or_default().push(enemy);
+    }
 
-    let category = weights
-        .as_slice()
-        .choose_weighted(&mut rng, |(_c, weight)| *weight)
-        .unwrap()
-        .0
-        .clone();
+    let group_name = enemy_groups.keys().choose(&mut rng).unwrap();
+    let enemy_group = &enemy_groups[group_name];
+
+    let player_level = player.level;
+    let enemy = enemy_group
+        .iter()
+        .filter(|e| {
+            let level_req = match e.category {
+                Category::Common => 1,
+                Category::Rare => 5,
+                Category::Legendary => 10,
+                _ => 1,
+            };
+            player_level >= level_req
+        })
+        .max_by_key(|e| e.hp.0)
+        .unwrap_or(&enemy_group[0]);
 
     let level = std::cmp::max(player.level / 10 + distance.len() - 1, 1);
-    (Class::random(category).clone(), level)
+    ((*enemy).clone(), level)
 }
 
 #[cfg(test)]

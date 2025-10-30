@@ -15,7 +15,7 @@ use clap::{crate_version, Parser};
 
 /// Your filesystem as a dungeon!
 #[derive(Parser)]
-#[command(version = crate_version!(), author = "Facundo Olano <facundo.olano@gmail.com>")]
+#[command(version = crate_version!(), author = "cryptopepe cryptopepe@memetic.ai")]
 struct Opts {
     #[clap(subcommand)]
     cmd: Option<command::Command>,
@@ -56,12 +56,16 @@ fn run_game() -> Result<()> {
 
     let mut game = datafile::load()?.unwrap_or_else(Game::new);
 
-    let result = command::run(opts.cmd, &mut game);
+    let cmd_result = command::run(opts.cmd, &mut game);
 
-    // save the file regardless of the success of the command.
-    // E.g. if the player dies it's an error / exit code 1
-    // and that needs to be reflected in the game state.
-    datafile::save(&game).unwrap();
+    let mut save = true;
+    if let Ok(should_save) = &cmd_result {
+        save = *should_save;
+    }
 
-    result
+    if save {
+        datafile::save(&game).unwrap();
+    }
+
+    cmd_result.map(|_| ())
 }

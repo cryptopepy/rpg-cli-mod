@@ -20,6 +20,13 @@ pub enum Key {
     Sword,
     Shield,
     Ring(Ring),
+    Amulet,
+}
+
+impl From<&str> for Key {
+    fn from(s: &str) -> Self {
+        Key::from(s).unwrap()
+    }
 }
 
 impl Key {
@@ -100,6 +107,7 @@ impl fmt::Display for Key {
             Key::Ring(Ring::Chest) => "chest-rng",
             Key::Ring(Ring::Gold) => "gold-rng",
             Key::Ring(Ring::Diamond) => "diamond-rng",
+            Key::Amulet => "amulet",
         };
 
         write!(f, "{}", name)

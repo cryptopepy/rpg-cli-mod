@@ -4,12 +4,16 @@ use crate::item::ring::Ring;
 use crate::item::Item;
 use crate::log;
 use crate::randomizer::{random, Randomizer};
+use anyhow::bail;
 use class::Class;
 use serde::{Deserialize, Serialize};
-use std::cmp::{max, min};
+use std::error::Error;
+use std::fmt;
 
 pub mod class;
 pub mod enemy;
+pub mod npc;
+use std::cmp::{max, min};
 
 #[derive(Serialize, Deserialize)]
 #[serde(default)]
@@ -33,6 +37,9 @@ pub struct Character {
     pub right_ring: Option<Ring>,
 
     pub status_effect: Option<StatusEffect>,
+
+    pub skill_points: i32,
+    pub unlocked_skills: std::collections::HashSet<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
@@ -53,6 +60,15 @@ pub enum AttackType {
 
 #[derive(Debug)]
 pub struct Dead;
+
+impl Error for Dead {}
+
+impl fmt::Display for Dead {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "You died.")
+    }
+}
+
 pub struct ClassNotFound;
 
 impl Default for Character {
@@ -95,6 +111,8 @@ impl Character {
             strength,
             speed,
             status_effect: None,
+            skill_points: 1,
+            unlocked_skills: std::collections::HashSet::new(),
         };
 
         for _ in 1..level {
@@ -151,6 +169,7 @@ impl Character {
     /// Raise the level and all the character stats.
     pub fn raise_level(&mut self) {
         self.level += 1;
+        self.skill_points += 1;
         self.raise_strength();
         self.raise_speed();
         self.raise_hp();
@@ -335,7 +354,7 @@ impl Character {
     fn attack_type(&self, receiver: &Self) -> AttackType {
         let inflicted_status = random().inflicted(self.inflicted_status_effect(receiver));
 
-        if random().is_miss(self.speed(), receiver.speed()) {
+        if random().is_miss(self.speed(), receiver) {
             AttackType::Miss
         } else if random().is_critical() {
             AttackType::Critical
@@ -585,6 +604,33 @@ impl Character {
             factor += ring.factor();
         }
         (base as f64 * factor).round() as i32
+    }
+
+    pub fn learn_skill(&mut self, skill_name: &str) -> Result<(), anyhow::Error> {
+        if self.skill_points <= 0 {
+            bail!("Not enough skill points.");
+        }
+
+        let skill_to_learn = self
+            .class
+            .skills
+            .iter()
+            .find(|s| s.name.eq_ignore_ascii_case(skill_name));
+
+        if let Some(skill) = skill_to_learn {
+            if self.level < skill.level_requirement {
+                bail!("Level not high enough to learn this skill.");
+            }
+            if self.unlocked_skills.contains(&skill.name) {
+                bail!("Skill already unlocked.");
+            }
+
+            self.skill_points -= 1;
+            self.unlocked_skills.insert(skill.name.clone());
+            Ok(())
+        } else {
+            bail!("Skill not found.")
+        }
     }
 }
 

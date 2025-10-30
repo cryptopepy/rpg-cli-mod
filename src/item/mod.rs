@@ -12,6 +12,9 @@ pub mod key;
 pub mod ring;
 pub mod shop;
 pub mod stone;
+pub mod amulet;
+
+
 
 #[typetag::serde(tag = "type")]
 pub trait Item: fmt::Display {

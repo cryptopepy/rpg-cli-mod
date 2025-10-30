@@ -11,6 +11,8 @@ mod beat_enemy;
 mod level;
 mod ring;
 mod tutorial;
+mod find_amulet;
+mod defeat_guardian;
 
 /// A task that is assigned to the player when certain conditions are met.
 /// New quests should implement this trait and be added to QuestList.setup method.
@@ -41,6 +43,9 @@ pub struct QuestList {
 enum Status {
     /// The quest won't be visible until the player reaches a specific level
     Locked(i32),
+
+    /// The quest is locked until another quest is completed
+    LockedByQuest(String),
 
     /// The quest is visible
     Unlocked,
@@ -150,6 +155,13 @@ impl QuestList {
             .push((Status::Unlocked, 100, Box::new(level::ReachLevel::new(2))));
 
         self.quests
+            .push((Status::Locked(2), 200, Box::new(find_amulet::FindAmulet::new())));
+        self.quests.push((
+            Status::LockedByQuest("Find the Amulet of Power.".to_string()),
+            1000,
+            Box::new(defeat_guardian::DefeatGuardian::new()),
+        ));
+        self.quests
             .push((Status::Locked(2), 200, Box::new(tutorial::FindChest)));
         self.quests
             .push((Status::Locked(2), 500, Box::new(level::ReachLevel::new(5))));
@@ -249,6 +261,21 @@ impl QuestList {
                 }
             }
         }
+
+        let completed_quests: Vec<String> = self
+            .quests
+            .iter()
+            .filter(|(s, _, _)| matches!(s, Status::Completed))
+            .map(|(_, _, q)| q.description())
+            .collect();
+
+        for (status, _, _) in &mut self.quests {
+            if let Status::LockedByQuest(req) = status {
+                if completed_quests.contains(req) {
+                    *status = Status::Unlocked;
+                }
+            }
+        }
     }
 
     pub fn list(&self) -> Vec<(bool, String)> {
@@ -256,7 +283,7 @@ impl QuestList {
 
         for (status, _, q) in &self.quests {
             match status {
-                Status::Locked(_) => {}
+                Status::Locked(_) | Status::LockedByQuest(_) => {}
                 Status::Unlocked => result.push((false, q.description())),
                 Status::Completed => result.push((true, q.description())),
             };
