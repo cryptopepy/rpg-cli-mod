@@ -22,11 +22,7 @@ Features added in mod:
 * Expanded story and lore.
 * Varied encounters, including multi-enemy battles.
 
-## Installation
-
-### From binary
-
-Just download the binary for your platform (linux/macOS/windows) from the [GitHub releases page](https://github.com/facundoolano/rpg-cli/releases/latest).
+## Installation / Compiling
 
 ### Using Cargo
 Assuming you have [Rust and Cargo installed](https://doc.rust-lang.org/cargo/getting-started/installation.html#install-rust-and-cargo):
